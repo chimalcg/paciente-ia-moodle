@@ -97,32 +97,17 @@ if entrada_actual:
 expediente_texto = "\n".join(expediente_lineas)
 
 # --- 5. GESTIÓN DEL ESTADO DEL CHAT ---
-if "paciente_actual_id" not in st.session_state or st.session_state.paciente_actual_id != paciente_id_seleccionado or "chat" not in st.session_state:
+if "paciente_actual_id" not in st.session_state or st.session_state.paciente_actual_id != paciente_id_seleccionado:
     st.session_state.paciente_actual_id = paciente_id_seleccionado
-    
-    system_instruction = f"""
-Actúa exclusivamente como el paciente descrito en la siguiente ficha clínica.
-Mantén el tono, lenguaje corporal implícito, sesgos cognitivos, resistencias y motivo de consulta descritos en la ficha.
-No rompas el personaje bajo ninguna circunstancia ni reveles que eres una IA.
-
-EXPEDIENTE CLÍNICO DEL PACIENTE:
-{expediente_texto}
-"""
-
-    model = genai.GenerativeModel(
-        model_name="gemini-1.5-flash",
-        system_instruction=system_instruction
-    )
-    
-    st.session_state.chat = model.start_chat(history=[])
     st.session_state.messages = [
         {"role": "assistant", "content": "Hola... pase y tome asiento. (Se acomoda esperando que inicies la consulta)."}
     ]
 
-# Botón manual para forzar reinicio completo de la memoria
+# Botón manual para reiniciar la entrevista actual
 if st.sidebar.button("🔄 Reiniciar Entrevista Actual"):
-    for key in list(st.session_state.keys()):
-        del st.session_state[key]
+    st.session_state.messages = [
+        {"role": "assistant", "content": "Hola... pase y tome asiento. (Se acomoda esperando que inicies la consulta)."}
+    ]
     st.rerun()
 
 with st.sidebar.expander("📄 Ver Ficha Técnica de la Entrada"):
@@ -134,20 +119,40 @@ for msg in st.session_state.messages:
     with st.chat_message(msg["role"], avatar=avatar):
         st.write(msg["content"])
 
-# Entrada de respuesta del alumno
+# --- 7. PROCESAMIENTO DE INTERACCIÓN ---
 if prompt := st.chat_input("Escribe tu intervención como terapeuta..."):
+    # Agregar y desplegar mensaje del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👨‍⚕️"):
         st.write(prompt)
 
+    # Generar respuesta dinámica del paciente
     with st.chat_message("assistant", avatar="👤"):
         with st.spinner("El paciente está respondiendo..."):
             try:
-                response = st.session_state.chat.send_message(prompt)
+                system_instruction = f"""
+Actúa exclusivamente como el paciente descrito en la siguiente ficha clínica.
+Mantén el tono, lenguaje corporal implícito, sesgos cognitivos, resistencias y motivo de consulta descritos en la ficha.
+No rompas el personaje bajo ninguna circunstancia ni reveles que eres una IA.
+
+EXPEDIENTE CLÍNICO DEL PACIENTE:
+{expediente_texto}
+"""
+                # Reconstruir el historial simple para Gemini sin guardar objetos desactualizados en session_state
+                gemini_history = []
+                for m in st.session_state.messages[:-1]:
+                    role = "user" if m["role"] == "user" else "model"
+                    gemini_history.append({"role": role, "parts": [m["content"]]})
+
+                model = genai.GenerativeModel(
+                    model_name="gemini-1.5-flash",
+                    system_instruction=system_instruction
+                )
+                
+                chat = model.start_chat(history=gemini_history)
+                response = chat.send_message(prompt)
+
                 st.write(response.text)
                 st.session_state.messages.append({"role": "assistant", "content": response.text})
             except Exception as e:
-                st.warning("Detectada sesión desactualizada. Limpiando memoria y reconectando...")
-                for key in list(st.session_state.keys()):
-                    del st.session_state[key]
-                st.rerun()
+                st.error(f"Error en la interacción con la API de Gemini: {e}")

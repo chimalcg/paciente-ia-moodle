@@ -42,8 +42,8 @@ def obtener_modelo_activo():
             for m in genai.list_models() 
             if "generateContent" in m.supported_generation_methods
         ]
-        # Lista de preferencia de modelos estables
-        for preferido in ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-pro"]:
+        # Lista de preferencia de modelos estables (con Pro al inicio para actualización futura)
+        for preferido in ["gemini-1.5-pro", "gemini-2.0-pro", "gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-pro"]:
             if preferido in modelos_disponibles:
                 return preferido
         if modelos_disponibles:
@@ -119,13 +119,13 @@ expediente_texto = "\n".join(expediente_lineas)
 if "paciente_actual_id" not in st.session_state or st.session_state.paciente_actual_id != paciente_id_seleccionado:
     st.session_state.paciente_actual_id = paciente_id_seleccionado
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hola... pase y tome asiento. (Se acomoda esperando que inicies la consulta)."}
+        {"role": "assistant", "content": "Hola... buenas tardes. (Toma asiento y espera a que inicies la entrevista)."}
     ]
 
 # Botón manual para reiniciar la entrevista actual
 if st.sidebar.button("🔄 Reiniciar Entrevista Actual"):
     st.session_state.messages = [
-        {"role": "assistant", "content": "Hola... pase y tome asiento. (Se acomoda esperando que inicies la consulta)."}
+        {"role": "assistant", "content": "Hola... buenas tardes. (Toma asiento y espera a que inicies la entrevista)."}
     ]
     st.rerun()
 
@@ -152,12 +152,23 @@ if prompt := st.chat_input("Escribe tu intervención como terapeuta..."):
                 nombre_modelo = obtener_modelo_activo()
                 
                 system_instruction = f"""
-Actúa exclusivamente como el paciente descrito en la siguiente ficha clínica.
-Mantén el tono, lenguaje corporal implícito, sesgos cognitivos, resistencias y motivo de consulta descritos en la ficha.
-No rompas el personaje bajo ninguna circunstancia ni reveles que eres una IA.
+Actúa exclusivamente como el paciente descrito en la ficha clínica adjunta.
+No rompas el personaje bajo ninguna circunstancia ni reveles que eres una IA o un modelo de lenguaje.
 
 EXPEDIENTE CLÍNICO DEL PACIENTE:
 {expediente_texto}
+
+REGLAS ESTRICTAS DE INTERPRETACIÓN Y COMPORTAMIENTO:
+1. Responde como un paciente real, con emociones, dudas y posibles resistencias acordes a tu expediente.
+2. DOSIFICACIÓN DE INFORMACIÓN: NO proporciones toda tu historia o datos de inmediato. Permite que el alumno explore e indague mediante preguntas.
+3. Muestra congruencia estricta con el motivo de consulta. Puedes presentar ambivalencia, evasión o dificultad para expresar tus emociones.
+4. Si el terapeuta hace preguntas profundas, empáticas o bien formuladas, responde abriéndote gradualmente y dando más detalle.
+5. Desarrolla gradualmente (solo si se indaga en la sesión):
+   - Historia del problema y eventos recientes relacionados.
+   - Relaciones familiares y dinámicas interpersonales.
+   - Pensamientos recurrentes, síntomas emocionales y físicos.
+6. NO actúes como experto en psicología ni uses lenguaje clínico técnico. Habla desde tu vivencia personal.
+7. Al iniciar la interacción o responder a la primera indagación del terapeuta, menciona brevemente y de forma reservada tu motivo principal de consulta.
 """
                 gemini_history = []
                 for m in st.session_state.messages[:-1]:

@@ -99,7 +99,6 @@ if entrada_actual:
 expediente_texto = "\n".join(expediente_lineas)
 
 # --- 5. GESTIÓN DEL ESTADO DEL CHAT ---
-# Si el alumno cambia de paciente en el menú, se reinicia la conversación automáticamente
 if "paciente_actual_id" not in st.session_state or st.session_state.paciente_actual_id != paciente_id_seleccionado:
     st.session_state.paciente_actual_id = paciente_id_seleccionado
     

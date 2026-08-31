@@ -73,7 +73,6 @@ for entrada in entries:
         if t:
             textos_campo.append(t)
     
-    # Toma el primer campo legible como nombre/título o usa el ID
     titulo_paciente = textos_campo[0][:40] if textos_campo else f"Caso #{entry_id}"
     pacientes_dict[entry_id] = f"ID {entry_id}: {titulo_paciente}"
 
@@ -86,7 +85,6 @@ paciente_id_seleccionado = st.sidebar.selectbox(
     format_func=lambda x: pacientes_dict[x]
 )
 
-# Extraer el expediente completo del paciente seleccionado
 entrada_actual = next((e for e in entries if e["id"] == paciente_id_seleccionado), None)
 
 expediente_lineas = []
@@ -99,7 +97,7 @@ if entrada_actual:
 expediente_texto = "\n".join(expediente_lineas)
 
 # --- 5. GESTIÓN DEL ESTADO DEL CHAT ---
-if "paciente_actual_id" not in st.session_state or st.session_state.paciente_actual_id != paciente_id_seleccionado:
+if "paciente_actual_id" not in st.session_state or st.session_state.paciente_actual_id != paciente_id_seleccionado or "chat" not in st.session_state:
     st.session_state.paciente_actual_id = paciente_id_seleccionado
     
     system_instruction = f"""
@@ -117,18 +115,16 @@ EXPEDIENTE CLÍNICO DEL PACIENTE:
     )
     
     st.session_state.chat = model.start_chat(history=[])
-    
-    # Saludo inicial general en rol
     st.session_state.messages = [
         {"role": "assistant", "content": "Hola... pase y tome asiento. (Se acomoda esperando que inicies la consulta)."}
     ]
 
-# Botón manual para reiniciar la entrevista actual
+# Botón manual para forzar reinicio completo de la memoria
 if st.sidebar.button("🔄 Reiniciar Entrevista Actual"):
-    st.session_state.paciente_actual_id = None
+    for key in list(st.session_state.keys()):
+        del st.session_state[key]
     st.rerun()
 
-# Mostrar información básica del expediente activo en la barra lateral
 with st.sidebar.expander("📄 Ver Ficha Técnica de la Entrada"):
     st.text(expediente_texto)
 
@@ -140,14 +136,18 @@ for msg in st.session_state.messages:
 
 # Entrada de respuesta del alumno
 if prompt := st.chat_input("Escribe tu intervención como terapeuta..."):
-    # Guardar y mostrar mensaje del terapeuta
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👨‍⚕️"):
         st.write(prompt)
 
-    # Respuesta generada por la IA
     with st.chat_message("assistant", avatar="👤"):
         with st.spinner("El paciente está respondiendo..."):
-            response = st.session_state.chat.send_message(prompt)
-            st.write(response.text)
-            st.session_state.messages.append({"role": "assistant", "content": response.text})
+            try:
+                response = st.session_state.chat.send_message(prompt)
+                st.write(response.text)
+                st.session_state.messages.append({"role": "assistant", "content": response.text})
+            except Exception as e:
+                st.warning("Detectada sesión desactualizada. Limpiando memoria y reconectando...")
+                for key in list(st.session_state.keys()):
+                    del st.session_state[key]
+                st.rerun()

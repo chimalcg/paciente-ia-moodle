@@ -33,6 +33,25 @@ def limpiar_html(raw_html):
     texto = soup.get_text(separator=" ")
     return re.sub(r'\s+', ' ', texto).strip()
 
+@st.cache_data(ttl=3600)
+def obtener_modelo_activo():
+    """Detecta automáticamente el primer modelo disponible para generateContent según tu API Key."""
+    try:
+        modelos_disponibles = [
+            m.name.replace("models/", "") 
+            for m in genai.list_models() 
+            if "generateContent" in m.supported_generation_methods
+        ]
+        # Lista de preferencia de modelos estables
+        for preferido in ["gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-1.5-pro", "gemini-pro"]:
+            if preferido in modelos_disponibles:
+                return preferido
+        if modelos_disponibles:
+            return modelos_disponibles[0]
+    except Exception:
+        pass
+    return "gemini-1.5-flash-latest"
+
 # --- 2. CARGAR TODOS LOS PACIENTES DESDE MOODLE ---
 @st.cache_data(ttl=300)
 def obtener_todos_los_pacientes():
@@ -130,6 +149,8 @@ if prompt := st.chat_input("Escribe tu intervención como terapeuta..."):
     with st.chat_message("assistant", avatar="👤"):
         with st.spinner("El paciente está respondiendo..."):
             try:
+                nombre_modelo = obtener_modelo_activo()
+                
                 system_instruction = f"""
 Actúa exclusivamente como el paciente descrito en la siguiente ficha clínica.
 Mantén el tono, lenguaje corporal implícito, sesgos cognitivos, resistencias y motivo de consulta descritos en la ficha.
@@ -138,14 +159,13 @@ No rompas el personaje bajo ninguna circunstancia ni reveles que eres una IA.
 EXPEDIENTE CLÍNICO DEL PACIENTE:
 {expediente_texto}
 """
-                # Reconstruir el historial simple para Gemini sin guardar objetos desactualizados en session_state
                 gemini_history = []
                 for m in st.session_state.messages[:-1]:
                     role = "user" if m["role"] == "user" else "model"
                     gemini_history.append({"role": role, "parts": [m["content"]]})
 
                 model = genai.GenerativeModel(
-                    model_name="gemini-1.5-flash",
+                    model_name=nombre_modelo,
                     system_instruction=system_instruction
                 )
                 

@@ -97,10 +97,8 @@ for entrada in entries:
         if t:
             textos_campo.append(t)
     
-    titulo_paciente = textos_campo[0][:40] if textos_campo else f"Caso #{entry_id}"
-
-pacientes_dict[entry_id] = f"ID {entry_id}: {titulo_paciente}"
-
+   titulo_paciente = textos_campo[0][:40] if textos_campo else f"Caso #{entry_id}"
+    pacientes_dict[entry_id] = f"ID {entry_id}: {titulo_paciente}"
 # --- 4. SELECCIÓN DE PACIENTE EN LA BARRA LATERAL ---
 st.sidebar.header("📋 Expedientes Clínicos")
 

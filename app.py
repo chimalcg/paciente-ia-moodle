@@ -1,6 +1,8 @@
 import streamlit as st
 import requests
 import re
+import json
+import os
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 
@@ -13,6 +15,11 @@ st.set_page_config(
 
 st.title("🧠 Simulador de Entrevistas Clínicas")
 st.caption("Selecciona un paciente del expediente de Moodle para iniciar la sesión de práctica.")
+
+# --- CARPETA DE RESPALDOS ---
+DATA_DIR = "guardados"
+if not os.path.exists(DATA_DIR):
+    os.makedirs(DATA_DIR)
 
 # --- 1. SEGURIDAD Y CREDENCIALES ---
 api_key = st.secrets.get("GEMINI_API_KEY", "")
@@ -35,14 +42,12 @@ def limpiar_html(raw_html):
 
 @st.cache_data(ttl=3600)
 def obtener_modelo_activo():
-    """Detecta automáticamente el primer modelo disponible para generateContent según tu API Key."""
     try:
         modelos_disponibles = [
             m.name.replace("models/", "") 
             for m in genai.list_models() 
             if "generateContent" in m.supported_generation_methods
         ]
-        # Lista de preferencia de modelos estables (con Pro al inicio para actualización futura)
         for preferido in ["gemini-1.5-pro", "gemini-2.0-pro", "gemini-1.5-flash-latest", "gemini-1.5-flash", "gemini-2.0-flash", "gemini-pro"]:
             if preferido in modelos_disponibles:
                 return preferido
@@ -115,19 +120,75 @@ if entrada_actual:
 
 expediente_texto = "\n".join(expediente_lineas)
 
-# --- 5. GESTIÓN DEL ESTADO DEL CHAT ---
+# --- 5. SISTEMA DE GESTIÓN Y PERSISTENCIA DE SESIÓN ---
 if "paciente_actual_id" not in st.session_state or st.session_state.paciente_actual_id != paciente_id_seleccionado:
     st.session_state.paciente_actual_id = paciente_id_seleccionado
     st.session_state.messages = [
         {"role": "assistant", "content": "Hola... buenas tardes. (Toma asiento y espera a que inicies la entrevista)."}
     ]
 
-# Botón manual para reiniciar la entrevista actual
-if st.sidebar.button("🔄 Reiniciar Entrevista Actual"):
-    st.session_state.messages = [
-        {"role": "assistant", "content": "Hola... buenas tardes. (Toma asiento y espera a que inicies la entrevista)."}
-    ]
-    st.rerun()
+st.sidebar.markdown("---")
+st.sidebar.header("💾 Progreso de Entrevista")
+
+alumno_id = st.sidebar.text_input("Ingresa tu Matrícula o Nombre:", placeholder="Ej. A01234567").strip()
+
+def obtener_ruta_archivo():
+    if not alumno_id:
+        return None
+    nombre_limpio = re.sub(r'[^a-zA-Z0-9_-]', '_', alumno_id.lower())
+    return os.path.join(DATA_DIR, f"{nombre_limpio}_paciente_{paciente_id_seleccionado}.json")
+
+col_btn1, col_btn2 = st.sidebar.columns(2)
+
+# Botón: Guardar
+with col_btn1:
+    if st.button("💾 Guardar", use_container_width=True):
+        ruta = obtener_ruta_archivo()
+        if not ruta:
+            st.sidebar.error("Escribe tu matrícula o nombre para guardar.")
+        else:
+            with open(ruta, "w", encoding="utf-8") as f:
+                json.dump(st.session_state.messages, f, ensure_ascii=False, indent=2)
+            st.sidebar.success("¡Progreso guardado!")
+
+# Botón: Cargar
+with col_btn2:
+    if st.button("📂 Cargar", use_container_width=True):
+        ruta = obtener_ruta_archivo()
+        if not ruta:
+            st.sidebar.error("Escribe tu matrícula o nombre para cargar.")
+        elif os.path.exists(ruta):
+            with open(ruta, "r", encoding="utf-8") as f:
+                st.session_state.messages = json.load(f)
+            st.sidebar.success("¡Sesión restaurada!")
+            st.rerun()
+        else:
+            st.sidebar.warning("No hay sesión guardada para este paciente.")
+
+col_btn3, col_btn4 = st.sidebar.columns(2)
+
+# Botón: Guardar y Salir
+with col_btn3:
+    if st.button("💾🚪 Guardar y Salir", use_container_width=True):
+        ruta = obtener_ruta_archivo()
+        if not ruta:
+            st.sidebar.error("Escribe tu matrícula o nombre antes de salir.")
+        else:
+            with open(ruta, "w", encoding="utf-8") as f:
+                json.dump(st.session_state.messages, f, ensure_ascii=False, indent=2)
+            st.session_state.messages = [
+                {"role": "assistant", "content": "Hola... buenas tardes. (Toma asiento y espera a que inicies la entrevista)."}
+            ]
+            st.sidebar.info("Progreso guardado. Sesión cerrada.")
+            st.rerun()
+
+# Botón: Salir / Reiniciar
+with col_btn4:
+    if st.button("🚪 Salir sin Guardar", use_container_width=True):
+        st.session_state.messages = [
+            {"role": "assistant", "content": "Hola... buenas tardes. (Toma asiento y espera a que inicies la entrevista)."}
+        ]
+        st.rerun()
 
 with st.sidebar.expander("📄 Ver Ficha Técnica de la Entrada"):
     st.text(expediente_texto)
@@ -140,12 +201,10 @@ for msg in st.session_state.messages:
 
 # --- 7. PROCESAMIENTO DE INTERACCIÓN ---
 if prompt := st.chat_input("Escribe tu intervención como terapeuta..."):
-    # Agregar y desplegar mensaje del usuario
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user", avatar="👨‍⚕️"):
         st.write(prompt)
 
-    # Generar respuesta dinámica del paciente
     with st.chat_message("assistant", avatar="👤"):
         with st.spinner("El paciente está respondiendo..."):
             try:

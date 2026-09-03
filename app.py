@@ -85,7 +85,7 @@ if not entries:
     st.warning("No se encontraron expedientes clínicos registrados en la base de datos de Moodle.")
     st.stop()
 
-# --- 3. CONSTRUIR DICCIONARIO DE PACIENTES PARA EL MENÚ ---
+# --- 3. CONSTRUIR DICCIONARIO DE PACIENTES USANDO EL CAMPO 2 (NOMBRE) ---
 pacientes_dict = {}
 
 for entrada in entries:
@@ -97,15 +97,39 @@ for entrada in entries:
         if t:
             textos_campo.append(t)
     
-   titulo_paciente = textos_campo[0][:40] if textos_campo else f"Caso #{entry_id}"
-    pacientes_dict[entry_id] = f"ID {entry_id}: {titulo_paciente}"
-# --- 4. SELECCIÓN DE PACIENTE EN LA BARRA LATERAL ---
+    # Extraer el nombre de forma segura (campo índice 1)
+    if len(textos_campo) > 1:
+        # Muestra el nombre del paciente y su identificador
+        nombre_paciente = f"{textos_campo[1]} (ID: {textos_campo[0]})"
+    elif len(textos_campo) == 1:
+        nombre_paciente = textos_campo[0]
+    else:
+        nombre_paciente = f"Caso #{entry_id}"
+        
+    pacientes_dict[entry_id] = nombre_paciente
+
+# --- 4. BÚSQUEDA Y SELECCIÓN DE PACIENTE EN LA BARRA LATERAL ---
 st.sidebar.header("📋 Expedientes Clínicos")
+
+# Buscador en tiempo real
+criterio_busqueda = st.sidebar.text_input("🔍 Buscar paciente por nombre:", "").strip().lower()
+
+if criterio_busqueda:
+    pacientes_filtrados = {
+        id_p: nombre for id_p, nombre in pacientes_dict.items()
+        if criterio_busqueda in nombre.lower()
+    }
+else:
+    pacientes_filtrados = pacientes_dict
+
+if not pacientes_filtrados:
+    st.sidebar.warning("No se encontraron pacientes que coincidan con la búsqueda.")
+    st.stop()
 
 paciente_id_seleccionado = st.sidebar.selectbox(
     "Selecciona al paciente para la sesión:",
-    options=list(pacientes_dict.keys()),
-    format_func=lambda x: pacientes_dict[x]
+    options=list(pacientes_filtrados.keys()),
+    format_func=lambda x: pacientes_filtrados[x]
 )
 
 entrada_actual = next((e for e in entries if e["id"] == paciente_id_seleccionado), None)
@@ -139,7 +163,6 @@ def obtener_ruta_archivo():
 
 col_btn1, col_btn2 = st.sidebar.columns(2)
 
-# Botón: Guardar
 with col_btn1:
     if st.button("💾 Guardar", use_container_width=True):
         ruta = obtener_ruta_archivo()
@@ -150,7 +173,6 @@ with col_btn1:
                 json.dump(st.session_state.messages, f, ensure_ascii=False, indent=2)
             st.sidebar.success("¡Progreso guardado!")
 
-# Botón: Cargar
 with col_btn2:
     if st.button("📂 Cargar", use_container_width=True):
         ruta = obtener_ruta_archivo()
@@ -166,7 +188,6 @@ with col_btn2:
 
 col_btn3, col_btn4 = st.sidebar.columns(2)
 
-# Botón: Guardar y Salir
 with col_btn3:
     if st.button("💾🚪 Guardar y Salir", use_container_width=True):
         ruta = obtener_ruta_archivo()
@@ -181,7 +202,6 @@ with col_btn3:
             st.sidebar.info("Progreso guardado. Sesión cerrada.")
             st.rerun()
 
-# Botón: Salir / Reiniciar
 with col_btn4:
     if st.button("🚪 Salir sin Guardar", use_container_width=True):
         st.session_state.messages = [

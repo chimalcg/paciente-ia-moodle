@@ -97,12 +97,7 @@ for entrada in entries:
         if t:
             textos_campo.append(t)
     
-    if len(textos_campo) > 1:
-    titulo_paciente = textos_campo[1][:40]
-elif len(textos_campo) == 1:
-    titulo_paciente = textos_campo[0][:40]
-else:
-    titulo_paciente = f"Caso #{entry_id}"
+    titulo_paciente = textos_campo[0][:40] if textos_campo else f"Caso #{entry_id}"
 
 pacientes_dict[entry_id] = f"ID {entry_id}: {titulo_paciente}"
 

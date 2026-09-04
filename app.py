@@ -16,7 +16,7 @@ st.set_page_config(
 col_logo, col_titulo = st.columns([1, 5])
 
 with col_logo:
-    st.image("logo.jpeg", use_container_width=True)
+    st.image("logo_ad.jpeg", use_container_width=True)
 
 with col_titulo:
     st.title("Simulador de Entrevistas Clínicas")

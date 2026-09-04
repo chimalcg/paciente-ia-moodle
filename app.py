@@ -13,7 +13,13 @@ st.set_page_config(
     layout="centered"
 )
 
-st.title("🧠 Simulador de Entrevistas Clínicas")
+col_logo, col_titulo = st.columns([1, 5])
+
+with col_logo:
+    st.image("logo.jpeg", use_container_width=True)
+
+with col_titulo:
+    st.title("Simulador de Entrevistas Clínicas")
 st.caption("Selecciona un paciente del expediente de Moodle para iniciar la sesión de práctica.")
 
 # --- CARPETA DE RESPALDOS ---

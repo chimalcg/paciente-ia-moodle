@@ -9,7 +9,7 @@ import google.generativeai as genai
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
     page_title="Simulador de Pacientes Virtuales", 
-    page_icon="🧠", 
+    page_icon="logo_ad.jpeg", 
     layout="centered"
 )
 

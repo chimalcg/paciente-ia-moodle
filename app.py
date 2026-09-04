@@ -115,6 +115,7 @@ for entrada in entries:
     pacientes_dict[entry_id] = nombre_paciente
 
 # --- 4. BÚSQUEDA Y SELECCIÓN DE PACIENTE EN LA BARRA LATERAL ---
+st.sidebar.image("logov.jpeg", use_container_width=True)
 st.sidebar.header("📋 Expedientes Clínicos")
 
 # Buscador en tiempo real

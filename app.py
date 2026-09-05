@@ -20,7 +20,10 @@ with col_logo:
 
 with col_titulo:
     st.title("Simulador de Entrevistas Clínicas")
-st.image("terapia.jpeg")
+coltera1, coltera2, coltera3 = st.columns([1, 2, 1])
+
+with coltera2:  # Colocamos la imagen solo en la columna del centro
+    st.image("terapia.jpeg", use_container_width=True)
 st.caption("Selecciona un paciente del expediente de Moodle para iniciar la sesión de práctica.")
 
 # --- CARPETA DE RESPALDOS ---

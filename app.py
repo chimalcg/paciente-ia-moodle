@@ -164,7 +164,7 @@ if "paciente_actual_id" not in st.session_state or st.session_state.paciente_act
 st.sidebar.markdown("---")
 st.sidebar.header("💾 Progreso de Entrevista")
 
-alumno_id = st.sidebar.text_input("Ingresa tu Nombre + las iniciales de tu nombre compreto:", placeholder="De:Juan Manuel Perez Lopez, solo JuanMPL").strip()
+alumno_id = st.sidebar.text_input("Ingresa tu Nombre + las iniciales de tu nombre compreto:", placeholder="De:Jose Luis Paz Lopez, solo JoseLPL").strip()
 
 def obtener_ruta_archivo():
     if not alumno_id:

@@ -20,6 +20,7 @@ with col_logo:
 
 with col_titulo:
     st.title("Simulador de Entrevistas Clínicas")
+st.image("terapia")
 st.caption("Selecciona un paciente del expediente de Moodle para iniciar la sesión de práctica.")
 
 # --- CARPETA DE RESPALDOS ---

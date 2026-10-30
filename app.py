@@ -40,7 +40,7 @@ if not api_key:
 genai.configure(api_key=api_key)
 
 MOODLE_URL = "https://srv1032855.hstgr.cloud/webservice/rest/server.php"
-MOODLE_TOKEN = "df2c3a0daa0665858b4b087b2d682003"
+MOODLE_TOKEN = "5e7250d6cc7d2c7bd79485e18d475a8c"
 DATABASE_ID = 5
 
 def limpiar_html(raw_html):
@@ -71,7 +71,7 @@ def obtener_modelo_activo():
 @st.cache_data(ttl=300)
 def obtener_todos_los_pacientes():
     params = {
-        "wstoken": "5e7250d6cc7d2c7bd79485e18d475a8c",
+        "wstoken": MOODLE_TOKEN,
         "wsfunction": "mod_data_get_entries",
         "moodlewsrestformat": "json",
         "databaseid": DATABASE_ID,
@@ -82,7 +82,7 @@ def obtener_todos_los_pacientes():
     }
 
     try:
-        res = requests.get(MOODLE_URL, params=params, headers=headers, timeout=15).json()
+        res = requests.get(MOODLE_URL, params=params, headers=headers, timeout=45).json()
         entries = res.get("entries", [])
         return entries
     except Exception as e:

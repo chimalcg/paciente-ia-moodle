@@ -3,6 +3,9 @@ import requests
 import re
 import json
 import os
+import csv
+import io
+import zipfile
 from bs4 import BeautifulSoup
 import google.generativeai as genai
 
@@ -20,11 +23,12 @@ with col_logo:
 
 with col_titulo:
     st.title("Simulador de Entrevistas Clínicas")
+
 coltera1, coltera2, coltera3 = st.columns([1, 2, 1])
 
-with coltera2:  # Colocamos la imagen solo en la columna del centro
+with coltera2:  
     st.image("terapia.jpeg", use_container_width=True)
-st.caption("Selecciona un paciente del expediente de Moodle para iniciar la sesión de práctica.")
+st.caption("Selecciona un paciente del expediente cargado o sube un archivo ZIP/CSV para iniciar la práctica.")
 
 # --- CARPETA DE RESPALDOS ---
 DATA_DIR = "guardados"
@@ -38,10 +42,6 @@ if not api_key:
     st.stop()
 
 genai.configure(api_key=api_key)
-
-MOODLE_URL = "https://srv1032855.hstgr.cloud/webservice/rest/server.php"
-MOODLE_TOKEN = "5e7250d6cc7d2c7bd79485e18d475a8c"
-DATABASE_ID = 5
 
 def limpiar_html(raw_html):
     if not raw_html:
@@ -67,32 +67,102 @@ def obtener_modelo_activo():
         pass
     return "gemini-1.5-flash-latest"
 
-# --- 2. CARGAR TODOS LOS PACIENTES DESDE MOODLE ---
-@st.cache_data(ttl=300)
-def obtener_todos_los_pacientes():
-    params = {
-        "wstoken": MOODLE_TOKEN,
-        "wsfunction": "mod_data_get_entries",
-        "moodlewsrestformat": "json",
-        "databaseid": DATABASE_ID,
-        "returncontents": 1
-    }
-    headers = {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
-    }
+# --- 2. GESTIÓN DE EXPEDIENTES LOCALES (ZIP / CSV) ---
+CSV_DB_CACHE = "expedientes_locales.json"
 
-    try:
-        res = requests.get(MOODLE_URL, params=params, headers=headers, timeout=45).json()
-        entries = res.get("entries", [])
-        return entries
-    except Exception as e:
-        st.error(f"Error de conexión con Moodle: {e}")
-        return []
+def guardar_expedientes_locales(entries):
+    with open(CSV_DB_CACHE, "w", encoding="utf-8") as f:
+        json.dump(entries, f, ensure_ascii=False, indent=2)
 
-entries = obtener_todos_los_pacientes()
+def cargar_expedientes_locales():
+    if os.path.exists(CSV_DB_CACHE):
+        try:
+            with open(CSV_DB_CACHE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return []
+    return []
+
+# --- PANEL LATERAL: CARGA DE EXPEDIENTES (ZIP O CSV) ---
+st.sidebar.image("logov.jpeg", use_container_width=True)
+st.sidebar.header("📋 Expedientes Clínicos")
+
+with st.sidebar.expander("📤 Subir / Actualizar Casos (.zip o .csv)", expanded=False):
+    st.markdown("Sube tu archivo comprimido `.zip` o el archivo `.csv` directamente para actualizar los casos.")
+    archivo_subido = st.file_uploader("Selecciona el archivo", type=["zip", "csv"])
+
+    if archivo_subido is not None:
+        if st.button("Procesar y Guardar Archivo"):
+            try:
+                contenido_texto = None
+                nombre_archivo = archivo_subido.name.lower()
+
+                # Si subieron un archivo ZIP
+                if nombre_archivo.endswith(".zip"):
+                    with zipfile.ZipFile(io.BytesIO(archivo_subido.getvalue())) as z:
+                        for archivo_en_zip in z.namelist():
+                            if archivo_en_zip.lower().endswith(".csv") and not archivo_en_zip.startswith("__MACOSX"):
+                                with z.open(archivo_en_zip) as f:
+                                    contenido_bytes = f.read()
+                                    try:
+                                        contenido_texto = contenido_bytes.decode("utf-8-sig")
+                                    except UnicodeDecodeError:
+                                        contenido_texto = contenido_bytes.decode("latin-1", errors="ignore")
+                                break
+                # Si subieron un archivo CSV directamente
+                else:
+                    contenido_bytes = archivo_subido.getvalue()
+                    try:
+                        contenido_texto = contenido_bytes.decode("utf-8-sig")
+                    except UnicodeDecodeError:
+                        contenido_texto = contenido_bytes.decode("latin-1", errors="ignore")
+
+                if not contenido_texto:
+                    st.error("No se encontró ningún archivo CSV válido dentro del archivo subido.")
+                else:
+                    lector = csv.reader(io.StringIO(contenido_texto))
+                    encabezados = next(lector, None)  # Omitir cabecera
+
+                    nuevas_entries = []
+                    for i, fila in enumerate(lector, 1):
+                        if not fila or len(fila) < 2:
+                            continue
+
+                        # Columna 1 (Índice 0) -> ID, Columna 2 (Índice 1) -> Nombre
+                        paciente_id = fila[0].strip() if len(fila) > 0 and fila[0].strip() else str(i)
+                        nombre = fila[1].strip() if len(fila) > 1 else f"Paciente {i}"
+                        if not nombre:
+                            nombre = f"Paciente {i}"
+
+                        # Unir las columnas restantes (a partir de la 3.ª) para formar la ficha clínica
+                        texto_clinico = " | ".join([col.strip() for col in fila[2:] if col.strip()])
+                        if not texto_clinico:
+                            texto_clinico = f"Consulta clínica correspondiente a {nombre}."
+
+                        entrada_mock = {
+                            "id": paciente_id,
+                            "contents": [
+                                {"content": paciente_id},
+                                {"content": nombre},
+                                {"content": texto_clinico}
+                            ]
+                        }
+                        nuevas_entries.append(entrada_mock)
+
+                    if nuevas_entries:
+                        guardar_expedientes_locales(nuevas_entries)
+                        st.success(f"¡{len(nuevas_entries)} expedientes cargados con éxito!")
+                        st.rerun()
+                    else:
+                        st.warning("El archivo no contiene registros válidos.")
+            except Exception as e:
+                st.error(f"Error al procesar el archivo: {e}")
+
+entries = cargar_expedientes_locales()
 
 if not entries:
-    st.warning("No se encontraron expedientes clínicos registrados en la base de datos de Moodle.")
+    st.sidebar.warning("⚠️ No hay expedientes cargados. Por favor, sube un archivo .zip o .csv en el panel superior.")
+    st.info("💡 **Cómo empezar:** Sube tu carpeta `.zip` o archivo `.csv` con los expedientes clínicos usando el menú de la barra lateral.")
     st.stop()
 
 # --- 3. CONSTRUIR DICCIONARIO DE PACIENTES USANDO EL CAMPO 2 (NOMBRE) ---
@@ -107,9 +177,8 @@ for entrada in entries:
         if t:
             textos_campo.append(t)
     
-    # Extraer el nombre de forma segura (campo índice 1)
+    # Extraer el nombre de forma segura (columna índice 1)
     if len(textos_campo) > 1:
-        # Muestra el nombre del paciente y su identificador
         nombre_paciente = f"{textos_campo[1]} (ID: {textos_campo[0]})"
     elif len(textos_campo) == 1:
         nombre_paciente = textos_campo[0]
@@ -119,10 +188,6 @@ for entrada in entries:
     pacientes_dict[entry_id] = nombre_paciente
 
 # --- 4. BÚSQUEDA Y SELECCIÓN DE PACIENTE EN LA BARRA LATERAL ---
-st.sidebar.image("logov.jpeg", use_container_width=True)
-st.sidebar.header("📋 Expedientes Clínicos")
-
-# Buscador en tiempo real
 criterio_busqueda = st.sidebar.text_input("🔍 Buscar paciente por nombre:", "").strip().lower()
 
 if criterio_busqueda:
@@ -143,7 +208,7 @@ paciente_id_seleccionado = st.sidebar.selectbox(
     format_func=lambda x: pacientes_filtrados[x]
 )
 
-entrada_actual = next((e for e in entries if e["id"] == paciente_id_seleccionado), None)
+entrada_actual = next((e for e in entries if str(e["id"]) == str(paciente_id_seleccionado)), None)
 
 expediente_lineas = []
 if entrada_actual:
@@ -164,7 +229,7 @@ if "paciente_actual_id" not in st.session_state or st.session_state.paciente_act
 st.sidebar.markdown("---")
 st.sidebar.header("💾 Progreso de Entrevista")
 
-alumno_id = st.sidebar.text_input("Ingresa tu Nombre + las iniciales de tu nombre compreto:", placeholder="De:Jose Luis Paz Lopez, solo JoseLPL").strip()
+alumno_id = st.sidebar.text_input("Ingresa tu Nombre + las iniciales de tu nombre completo:", placeholder="Ej: JoseLPL").strip()
 
 def obtener_ruta_archivo():
     if not alumno_id:
@@ -178,7 +243,7 @@ with col_btn1:
     if st.button("💾 Guardar", use_container_width=True):
         ruta = obtener_ruta_archivo()
         if not ruta:
-            st.sidebar.error("Escribe tu matrícula o nombre para guardar.")
+            st.sidebar.error("Escribe tu nombre/iniciales para guardar.")
         else:
             with open(ruta, "w", encoding="utf-8") as f:
                 json.dump(st.session_state.messages, f, ensure_ascii=False, indent=2)
@@ -188,7 +253,7 @@ with col_btn2:
     if st.button("📂 Cargar", use_container_width=True):
         ruta = obtener_ruta_archivo()
         if not ruta:
-            st.sidebar.error("Escribe tu matrícula o nombre para cargar.")
+            st.sidebar.error("Escribe tu nombre/iniciales para cargar.")
         elif os.path.exists(ruta):
             with open(ruta, "r", encoding="utf-8") as f:
                 st.session_state.messages = json.load(f)
@@ -203,7 +268,7 @@ with col_btn3:
     if st.button("💾🚪 Guardar y Salir", use_container_width=True):
         ruta = obtener_ruta_archivo()
         if not ruta:
-            st.sidebar.error("Escribe tu matrícula o nombre antes de salir.")
+            st.sidebar.error("Escribe tu nombre/iniciales antes de salir.")
         else:
             with open(ruta, "w", encoding="utf-8") as f:
                 json.dump(st.session_state.messages, f, ensure_ascii=False, indent=2)
@@ -252,7 +317,7 @@ REGLAS ESTRICTAS DE INTERPRETACIÓN Y COMPORTAMIENTO:
 2. DOSIFICACIÓN DE INFORMACIÓN: NO proporciones toda tu historia o datos de inmediato. Permite que el alumno explore e indague mediante preguntas.
 3. Muestra congruencia estricta con el motivo de consulta. Puedes presentar ambivalencia, evasión o dificultad para expresar tus emociones.
 4. Si el terapeuta hace preguntas profundas, empáticas o bien formuladas, responde abriéndote gradualmente y dando más detalle.
-5. Desarrolla gradualmente (solo si se indaga en la sesión):
+5. Desarrollar gradualmente (solo si se indaga en la sesión):
    - Historia del problema y eventos recientes relacionados.
    - Relaciones familiares y dinámicas interpersonales.
    - Pensamientos recurrentes, síntomas emocionales y físicos.

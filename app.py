@@ -82,7 +82,7 @@ def obtener_todos_los_pacientes():
     }
 
     try:
-        res = requests.get(MOODLE_URL, params=params, headers=headers, timeout=45).json()
+        res = requests.get(MOODLE_URL, params=params, headers=headers, timeout=15).json()
         entries = res.get("entries", [])
         return entries
     except Exception as e:

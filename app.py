@@ -71,7 +71,7 @@ def obtener_modelo_activo():
 @st.cache_data(ttl=300)
 def obtener_todos_los_pacientes():
     params = {
-        "wstoken": MOODLE_TOKEN,
+        "wstoken": "50e1e13af8d5741848e9c824ef52aa97",
         "wsfunction": "mod_data_get_entries",
         "moodlewsrestformat": "json",
         "databaseid": DATABASE_ID,

@@ -2,12 +2,16 @@ import streamlit as st
 import requests
 import re
 import json
+import sys
 import os
 import csv
 import io
 import zipfile
 from bs4 import BeautifulSoup
 import google.generativeai as genai
+
+# 🛠️ Aumentar el límite de tamaño de celda para fichas clínicas muy extensas
+csv.field_size_limit(sys.maxsize)
 
 # --- CONFIGURACIÓN DE PÁGINA ---
 st.set_page_config(
